@@ -1,0 +1,28 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Israeli Premier League",
+        "data": {
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "API Key שגוי. בדוק שהמפתח נכון."
+    },
+    "abort": {
+      "already_configured": "האינטגרציה כבר מוגדרת."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "הגדרות",
+        "data": {
+          "scan_interval": "תדירות עדכון (שעות)"
+        }
+      }
+    }
+  }
+}
