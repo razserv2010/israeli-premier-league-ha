@@ -18,7 +18,7 @@ class IsraeliPremierLeagueAPI:
     async def async_validate(self) -> bool:
         try:
             async with self._session.get(
-                f"{API_BASE_URL}/eventsnextleague.php?id={LEAGUE_ID}",
+                f"{API_BASE_URL}/eventsday.php?d=2025-01-01&l=4644",
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 return resp.status == 200
@@ -28,25 +28,30 @@ class IsraeliPremierLeagueAPI:
 
     async def async_get_fixtures(self) -> list[dict]:
         now = datetime.now(timezone(timedelta(hours=3)))
-        cutoff = now + timedelta(days=DAYS_AHEAD)
-
-        try:
-            async with self._session.get(
-                f"{API_BASE_URL}/eventsnextleague.php?id={LEAGUE_ID}",
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as resp:
-                if resp.status != 200:
-                    raise UpdateFailed(f"API returned status {resp.status}")
-                data = await resp.json(content_type=None)
-        except aiohttp.ClientError as err:
-            raise UpdateFailed(f"Network error: {err}") from err
-
-        events = data.get("events") or []
         results = []
-        for event in events:
-            parsed = self._parse_event(event)
-            if parsed and parsed["match_datetime"] <= cutoff:
-                results.append(parsed)
+        seen_ids = set()
+
+        for day_offset in range(DAYS_AHEAD + 1):
+            day = now + timedelta(days=day_offset)
+            date_str = day.strftime("%Y-%m-%d")
+
+            try:
+                async with self._session.get(
+                    f"{API_BASE_URL}/eventsday.php?d={date_str}&l={LEAGUE_ID}",
+                    timeout=aiohttp.ClientTimeout(total=15)
+                ) as resp:
+                    if resp.status != 200:
+                        continue
+                    data = await resp.json(content_type=None)
+            except aiohttp.ClientError as err:
+                _LOGGER.warning("Error fetching day %s: %s", date_str, err)
+                continue
+
+            for event in (data.get("events") or []):
+                parsed = self._parse_event(event)
+                if parsed and parsed["fixture_id"] not in seen_ids:
+                    seen_ids.add(parsed["fixture_id"])
+                    results.append(parsed)
 
         results.sort(key=lambda x: x["match_datetime"])
         return results
@@ -85,5 +90,5 @@ class IsraeliPremierLeagueAPI:
             "status_short": status_raw,
             "venue": event.get("strVenue", ""),
             "round": event.get("intRound", ""),
-            "channels": event.get("strTVStation", "") or "ספורט 1 / ONE",
+            "channels": event.get("strTVStation") or "ספורט 1 / ONE",
         }
