@@ -1,0 +1,8 @@
+{
+  "name": "Israeli Premier League",
+  "domains": ["sensor"],
+  "documentation": "https://github.com/razserv2010/israeli-premier-league-ha",
+  "issue_tracker": "https://github.com/razserv2010/israeli-premier-league-ha/issues",
+  "render_readme": true,
+  "homeassistant": "2023.1.0"
+}
