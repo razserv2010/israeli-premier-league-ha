@@ -10,6 +10,8 @@ from .const import API_BASE_URL, LEAGUE_ID, DAYS_AHEAD
 
 _LOGGER = logging.getLogger(__name__)
 
+IL_TZ = timezone(timedelta(hours=3))
+
 class IsraeliPremierLeagueAPI:
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
@@ -18,7 +20,7 @@ class IsraeliPremierLeagueAPI:
     async def async_validate(self) -> bool:
         try:
             async with self._session.get(
-                f"{API_BASE_URL}/eventsday.php?d=2025-01-01&l=4644",
+                f"{API_BASE_URL}/eventsday.php?d=2025-01-01&l={LEAGUE_ID}",
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 return resp.status == 200
@@ -27,7 +29,7 @@ class IsraeliPremierLeagueAPI:
         return False
 
     async def async_get_fixtures(self) -> list[dict]:
-        now = datetime.now(timezone(timedelta(hours=3)))
+        now = datetime.now(IL_TZ)
         results = []
         seen_ids = set()
 
@@ -60,8 +62,10 @@ class IsraeliPremierLeagueAPI:
         try:
             date_str = event.get("dateEvent", "")
             time_str = event.get("strTime", "00:00:00") or "00:00:00"
-            dt = datetime.strptime(f"{date_str} {time_str[:5]}", "%Y-%m-%d %H:%M")
-            il_time = dt.replace(tzinfo=timezone(timedelta(hours=3)))
+            # TheSportsDB מחזיר שעות ב-UTC — מוסיפים 3 שעות לשעון ישראל
+            dt_utc = datetime.strptime(f"{date_str} {time_str[:5]}", "%Y-%m-%d %H:%M")
+            dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+            il_time = dt_utc.astimezone(IL_TZ)
         except Exception:
             return None
 
@@ -90,5 +94,5 @@ class IsraeliPremierLeagueAPI:
             "status_short": status_raw,
             "venue": event.get("strVenue", ""),
             "round": event.get("intRound", ""),
-            "channels": event.get("strTVStation") or "ספורט 1 / ONE",
+            "channels": "ספורט 1 / ספורט 2 / ONE",
         }
