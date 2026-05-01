@@ -12,7 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = ["sensor"]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    api = IsraeliPremierLeagueAPI(hass, entry.data["api_key"])
+    api = IsraeliPremierLeagueAPI(hass)
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     coordinator = DataUpdateCoordinator(
         hass, _LOGGER, name=DOMAIN,
