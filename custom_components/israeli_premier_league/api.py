@@ -1,4 +1,4 @@
-"""API client for Israeli Premier League (api-sports.io)."""
+"""API client for Israeli Premier League (TheSportsDB)."""
 from __future__ import annotations
 import logging
 from datetime import datetime, timedelta, timezone
@@ -11,93 +11,79 @@ from .const import API_BASE_URL, LEAGUE_ID, DAYS_AHEAD
 _LOGGER = logging.getLogger(__name__)
 
 class IsraeliPremierLeagueAPI:
-    def __init__(self, hass: HomeAssistant, api_key: str) -> None:
+    def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
-        self._api_key = api_key
         self._session = async_get_clientsession(hass)
 
-    @property
-    def _headers(self) -> dict:
-        return {"x-apisports-key": self._api_key, "Accept": "application/json"}
-
-    async def async_validate_key(self) -> bool:
+    async def async_validate(self) -> bool:
         try:
             async with self._session.get(
-                f"{API_BASE_URL}/status", headers=self._headers,
+                f"{API_BASE_URL}/eventsnextleague.php?id={LEAGUE_ID}",
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data.get("response", {}).get("requests", {}).get("current", -1) >= 0
+                return resp.status == 200
         except Exception as err:
-            _LOGGER.error("Error validating API key: %s", err)
+            _LOGGER.error("Connection error: %s", err)
         return False
 
     async def async_get_fixtures(self) -> list[dict]:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone(timedelta(hours=3)))
+        cutoff = now + timedelta(days=DAYS_AHEAD)
 
-        # עונת כדורגל: אוגוסט-יולי. אם לפני אוגוסט — העונה התחילה אשתקד
-        season = now.year if now.month >= 8 else now.year - 1
-
-        params = {
-            "league": LEAGUE_ID,
-            "season": season,
-            "from": now.strftime("%Y-%m-%d"),
-            "to": (now + timedelta(days=DAYS_AHEAD)).strftime("%Y-%m-%d"),
-            "timezone": "Asia/Jerusalem",
-        }
         try:
             async with self._session.get(
-                f"{API_BASE_URL}/fixtures", headers=self._headers, params=params,
+                f"{API_BASE_URL}/eventsnextleague.php?id={LEAGUE_ID}",
                 timeout=aiohttp.ClientTimeout(total=15)
             ) as resp:
                 if resp.status != 200:
                     raise UpdateFailed(f"API returned status {resp.status}")
-                data = await resp.json()
+                data = await resp.json(content_type=None)
         except aiohttp.ClientError as err:
             raise UpdateFailed(f"Network error: {err}") from err
 
-        results = [self._parse_fixture(f) for f in data.get("response", [])]
+        events = data.get("events") or []
+        results = []
+        for event in events:
+            parsed = self._parse_event(event)
+            if parsed and parsed["match_datetime"] <= cutoff:
+                results.append(parsed)
+
         results.sort(key=lambda x: x["match_datetime"])
         return results
 
-    def _parse_fixture(self, fixture: dict) -> dict:
-        f = fixture.get("fixture", {})
-        teams = fixture.get("teams", {})
-        goals = fixture.get("goals", {})
-        league = fixture.get("league", {})
-        dt_str = f.get("date", "")
+    def _parse_event(self, event: dict) -> dict | None:
         try:
-            match_dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-            il_time = match_dt.astimezone(timezone(timedelta(hours=3)))
-            date_str = il_time.strftime("%d/%m/%Y")
-            time_str = il_time.strftime("%H:%M")
+            date_str = event.get("dateEvent", "")
+            time_str = event.get("strTime", "00:00:00") or "00:00:00"
+            dt = datetime.strptime(f"{date_str} {time_str[:5]}", "%Y-%m-%d %H:%M")
+            il_time = dt.replace(tzinfo=timezone(timedelta(hours=3)))
         except Exception:
-            date_str = dt_str[:10]
-            time_str = ""
-            il_time = datetime.min.replace(tzinfo=timezone.utc)
+            return None
 
+        status_raw = event.get("strStatus") or "NS"
         status_map = {
-            "NS": "לא התחיל", "1H": "מחצית ראשונה", "HT": "הפסקה",
-            "2H": "מחצית שנייה", "ET": "הארכה", "P": "פנדלים",
-            "FT": "הסתיים", "AET": "הסתיים (הארכה)", "PEN": "הסתיים (פנדלים)",
-            "PST": "נדחה", "CANC": "בוטל", "TBD": "לא נקבע",
+            "NS": "לא התחיל",
+            "Match Finished": "הסתיים",
+            "Half Time": "הפסקה",
+            "In Progress": "במהלך",
+            "Postponed": "נדחה",
+            "Cancelled": "בוטל",
         }
-        status = f.get("status", {}).get("short", "NS")
+
         return {
-            "fixture_id": f.get("id"),
+            "fixture_id": event.get("idEvent"),
             "match_datetime": il_time,
-            "match_date": date_str,
-            "match_time": time_str,
-            "home_team": teams.get("home", {}).get("name", ""),
-            "away_team": teams.get("away", {}).get("name", ""),
-            "home_logo": teams.get("home", {}).get("logo", ""),
-            "away_logo": teams.get("away", {}).get("logo", ""),
-            "home_score": goals.get("home"),
-            "away_score": goals.get("away"),
-            "status": status_map.get(status, status),
-            "status_short": status,
-            "venue": f.get("venue", {}).get("name", ""),
-            "round": league.get("round", ""),
-            "channels": ["ספורט 1", "ספורט 2", "ONE"],
+            "match_date": il_time.strftime("%d/%m/%Y"),
+            "match_time": il_time.strftime("%H:%M"),
+            "home_team": event.get("strHomeTeam", ""),
+            "away_team": event.get("strAwayTeam", ""),
+            "home_logo": event.get("strHomeTeamBadge", ""),
+            "away_logo": event.get("strAwayTeamBadge", ""),
+            "home_score": event.get("intHomeScore"),
+            "away_score": event.get("intAwayScore"),
+            "status": status_map.get(status_raw, status_raw),
+            "status_short": status_raw,
+            "venue": event.get("strVenue", ""),
+            "round": event.get("intRound", ""),
+            "channels": event.get("strTVStation", "") or "ספורט 1 / ONE",
         }
