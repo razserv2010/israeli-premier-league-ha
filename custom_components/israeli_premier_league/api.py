@@ -12,6 +12,28 @@ _LOGGER = logging.getLogger(__name__)
 
 IL_TZ = timezone(timedelta(hours=3))
 
+TEAM_NAMES_HE = {
+    "Maccabi Tel Aviv": "מכבי תל אביב",
+    "Maccabi Haifa": "מכבי חיפה",
+    "Hapoel Tel Aviv": "הפועל תל אביב",
+    "Hapoel Beer Sheva": "הפועל באר שבע",
+    "Hapoel Haifa": "הפועל חיפה",
+    "Beitar Jerusalem": "בית\"ר ירושלים",
+    "Hapoel Jerusalem": "הפועל ירושלים",
+    "Maccabi Netanya": "מכבי נתניה",
+    "Maccabi Bnei Raina": "מכבי בני ריינה",
+    "Bnei Sakhnin": "בני סכנין",
+    "Hapoel Petah Tikva": "הפועל פתח תקווה",
+    "Ironi Kiryat Shmona": "עירוני קרית שמונה",
+    "MS Ashdod": "מ.ס. אשדוד",
+    "Ironi Tiberias": "עירוני טבריה",
+    "Hapoel Nof HaGalil": "הפועל נוף הגליל",
+    "Sektzia Nes Tziona": "סקציה נס ציונה",
+    "Ashdod FC": "מ.ס. אשדוד",
+    "Hapoel Hadera": "הפועל חדרה",
+    "Maccabi Petah Tikva": "מכבי פתח תקווה",
+}
+
 class IsraeliPremierLeagueAPI:
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
@@ -58,11 +80,13 @@ class IsraeliPremierLeagueAPI:
         results.sort(key=lambda x: x["match_datetime"])
         return results
 
+    def _translate_team(self, name: str) -> str:
+        return TEAM_NAMES_HE.get(name, name)
+
     def _parse_event(self, event: dict) -> dict | None:
         try:
             date_str = event.get("dateEvent", "")
             time_str = event.get("strTime", "00:00:00") or "00:00:00"
-            # TheSportsDB מחזיר שעות ב-UTC — מוסיפים 3 שעות לשעון ישראל
             dt_utc = datetime.strptime(f"{date_str} {time_str[:5]}", "%Y-%m-%d %H:%M")
             dt_utc = dt_utc.replace(tzinfo=timezone.utc)
             il_time = dt_utc.astimezone(IL_TZ)
@@ -79,13 +103,18 @@ class IsraeliPremierLeagueAPI:
             "Cancelled": "בוטל",
         }
 
+        home_en = event.get("strHomeTeam", "")
+        away_en = event.get("strAwayTeam", "")
+
         return {
             "fixture_id": event.get("idEvent"),
             "match_datetime": il_time,
             "match_date": il_time.strftime("%d/%m/%Y"),
             "match_time": il_time.strftime("%H:%M"),
-            "home_team": event.get("strHomeTeam", ""),
-            "away_team": event.get("strAwayTeam", ""),
+            "home_team": self._translate_team(home_en),
+            "away_team": self._translate_team(away_en),
+            "home_team_en": home_en,
+            "away_team_en": away_en,
             "home_logo": event.get("strHomeTeamBadge", ""),
             "away_logo": event.get("strAwayTeamBadge", ""),
             "home_score": event.get("intHomeScore"),
