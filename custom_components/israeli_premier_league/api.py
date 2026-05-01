@@ -13,6 +13,10 @@ _LOGGER = logging.getLogger(__name__)
 IL_TZ = timezone(timedelta(hours=3))
 
 TEAM_NAMES_HE = {
+    "Hapoel Be'er Sheva": "הפועל באר שבע",
+    "Hapoel Tel-Aviv": "הפועל תל אביב",
+    "FCAshdod": "מ.ס. אשדוד",
+    "Hapoel Ironi Kiryat Shmona": "הפועל עירוני קרית שמונה",
     "Maccabi Tel Aviv": "מכבי תל אביב",
     "Maccabi Haifa": "מכבי חיפה",
     "Hapoel Tel Aviv": "הפועל תל אביב",
