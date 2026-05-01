@@ -2,7 +2,6 @@ DOMAIN = "israeli_premier_league"
 
 API_BASE_URL = "https://v3.football.api-sports.io"
 LEAGUE_ID = 271
-SEASON = 2025
 
 DEFAULT_SCAN_INTERVAL = 3
 DAYS_AHEAD = 3
