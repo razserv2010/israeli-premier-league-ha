@@ -5,7 +5,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
-from .const import DOMAIN, CONF_API_KEY, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL, DEFAULT_API_KEY
+from .const import DOMAIN, CONF_API_KEY, CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
 from .api import IsraeliPremierLeagueAPI
 
 _LOGGER = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ class IsraeliPremierLeagueConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
-                vol.Required(CONF_API_KEY, default=DEFAULT_API_KEY): str
+                vol.Required(CONF_API_KEY): str
             }),
             errors=errors,
         )
