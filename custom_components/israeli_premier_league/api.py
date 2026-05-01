@@ -6,7 +6,7 @@ import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import UpdateFailed
-from .const import API_BASE_URL, LEAGUE_ID, SEASON, DAYS_AHEAD
+from .const import API_BASE_URL, LEAGUE_ID, DAYS_AHEAD
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,8 +35,13 @@ class IsraeliPremierLeagueAPI:
 
     async def async_get_fixtures(self) -> list[dict]:
         now = datetime.now(timezone.utc)
+
+        # עונת כדורגל: אוגוסט-יולי. אם לפני אוגוסט — העונה התחילה אשתקד
+        season = now.year if now.month >= 8 else now.year - 1
+
         params = {
-            "league": LEAGUE_ID, "season": SEASON,
+            "league": LEAGUE_ID,
+            "season": season,
             "from": now.strftime("%Y-%m-%d"),
             "to": (now + timedelta(days=DAYS_AHEAD)).strftime("%Y-%m-%d"),
             "timezone": "Asia/Jerusalem",
