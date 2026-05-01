@@ -1,0 +1,11 @@
+{
+  "domain": "israeli_premier_league",
+  "name": "Israeli Premier League",
+  "version": "1.0.0",
+  "documentation": "https://api-sports.io",
+  "requirements": [],
+  "dependencies": [],
+  "codeowners": [],
+  "iot_class": "cloud_polling",
+  "config_flow": true
+}
