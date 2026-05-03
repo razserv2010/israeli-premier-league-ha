@@ -13,14 +13,12 @@ _LOGGER = logging.getLogger(__name__)
 IL_TZ = timezone(timedelta(hours=3))
 
 TEAM_NAMES_HE = {
-    "Hapoel Be'er Sheva": "הפועל באר שבע",
-    "Hapoel Tel-Aviv": "הפועל תל אביב",
-    "FCAshdod": "מ.ס. אשדוד",
-    "Hapoel Ironi Kiryat Shmona": "הפועל עירוני קרית שמונה",
     "Maccabi Tel Aviv": "מכבי תל אביב",
     "Maccabi Haifa": "מכבי חיפה",
     "Hapoel Tel Aviv": "הפועל תל אביב",
+    "Hapoel Tel-Aviv": "הפועל תל אביב",
     "Hapoel Beer Sheva": "הפועל באר שבע",
+    "Hapoel Be'er Sheva": "הפועל באר שבע",
     "Hapoel Haifa": "הפועל חיפה",
     "Beitar Jerusalem": "בית\"ר ירושלים",
     "Hapoel Jerusalem": "הפועל ירושלים",
@@ -29,14 +27,16 @@ TEAM_NAMES_HE = {
     "Bnei Sakhnin": "בני סכנין",
     "Hapoel Petah Tikva": "הפועל פתח תקווה",
     "Ironi Kiryat Shmona": "עירוני קרית שמונה",
+    "Hapoel Ironi Kiryat Shmona": "הפועל עירוני קרית שמונה",
     "MS Ashdod": "מ.ס. אשדוד",
+    "FC Ashdod": "מ.ס. אשדוד",
     "Ironi Tiberias": "עירוני טבריה",
     "Hapoel Nof HaGalil": "הפועל נוף הגליל",
-    "Sektzia Nes Tziona": "סקציה נס ציונה",
-    "Ashdod FC": "מ.ס. אשדוד",
-    "Hapoel Hadera": "הפועל חדרה",
     "Maccabi Petah Tikva": "מכבי פתח תקווה",
+    "Hapoel Hadera": "הפועל חדרה",
 }
+
+FINISHED_STATUSES = {"FT", "AET", "PEN", "Match Finished"}
 
 class IsraeliPremierLeagueAPI:
     def __init__(self, hass: HomeAssistant) -> None:
@@ -82,6 +82,13 @@ class IsraeliPremierLeagueAPI:
                     results.append(parsed)
 
         results.sort(key=lambda x: x["match_datetime"])
+
+        # הסר משחקים שהסתיימו
+        results = [
+            f for f in results
+            if f["status_short"] not in FINISHED_STATUSES
+        ]
+
         return results
 
     def _translate_team(self, name: str) -> str:
@@ -105,6 +112,12 @@ class IsraeliPremierLeagueAPI:
             "In Progress": "במהלך",
             "Postponed": "נדחה",
             "Cancelled": "בוטל",
+            "1H": "מחצית ראשונה",
+            "2H": "מחצית שנייה",
+            "HT": "הפסקה",
+            "FT": "הסתיים",
+            "AET": "הסתיים (הארכה)",
+            "PEN": "הסתיים (פנדלים)",
         }
 
         home_en = event.get("strHomeTeam", "")
