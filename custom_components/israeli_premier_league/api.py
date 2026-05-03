@@ -36,7 +36,7 @@ TEAM_NAMES_HE = {
     "Hapoel Hadera": "הפועל חדרה",
 }
 
-FINISHED_STATUSES = {"FT", "AET", "PEN", "Match Finished"}
+LIVE_STATUSES = {"1H", "2H", "HT", "ET", "P", "Halftime", "In Progress"}
 
 class IsraeliPremierLeagueAPI:
     def __init__(self, hass: HomeAssistant) -> None:
@@ -83,10 +83,10 @@ class IsraeliPremierLeagueAPI:
 
         results.sort(key=lambda x: x["match_datetime"])
 
-        # הסר משחקים שהסתיימו
+        # הסר משחקים שהתחילו לפני יותר משעה וחצי
         results = [
             f for f in results
-            if f["status_short"] not in FINISHED_STATUSES
+            if f["match_datetime"] > now - timedelta(hours=1, minutes=30)
         ]
 
         return results
@@ -108,16 +108,18 @@ class IsraeliPremierLeagueAPI:
         status_map = {
             "NS": "לא התחיל",
             "Match Finished": "הסתיים",
-            "Half Time": "הפסקה",
+            "Halftime": "הפסקה",
+            "HT": "הפסקה",
             "In Progress": "במהלך",
-            "Postponed": "נדחה",
-            "Cancelled": "בוטל",
             "1H": "מחצית ראשונה",
             "2H": "מחצית שנייה",
-            "HT": "הפסקה",
+            "ET": "הארכה",
+            "P": "פנדלים",
             "FT": "הסתיים",
             "AET": "הסתיים (הארכה)",
             "PEN": "הסתיים (פנדלים)",
+            "Postponed": "נדחה",
+            "Cancelled": "בוטל",
         }
 
         home_en = event.get("strHomeTeam", "")
