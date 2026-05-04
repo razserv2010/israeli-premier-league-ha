@@ -36,6 +36,7 @@ TEAM_NAMES_HE = {
     "Hapoel Hadera": "הפועל חדרה",
 }
 
+FINISHED_STATUSES = {"Match Finished", "FT", "AET", "PEN"}
 LIVE_STATUSES = {"1H", "2H", "HT", "ET", "P", "Halftime", "In Progress"}
 
 class IsraeliPremierLeagueAPI:
@@ -53,6 +54,23 @@ class IsraeliPremierLeagueAPI:
         except Exception as err:
             _LOGGER.error("Connection error: %s", err)
         return False
+
+    async def async_get_real_status(self, fixture_id: str) -> str | None:
+        """משוך סטטוס אמיתי של משחק מ-lookupevent."""
+        try:
+            async with self._session.get(
+                f"{API_BASE_URL}/lookupevent.php?id={fixture_id}",
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status != 200:
+                    return None
+                data = await resp.json(content_type=None)
+                events = data.get("events") or []
+                if events:
+                    return events[0].get("strStatus")
+        except Exception as err:
+            _LOGGER.debug("Error fetching status for %s: %s", fixture_id, err)
+        return None
 
     async def async_get_fixtures(self) -> list[dict]:
         now = datetime.now(IL_TZ)
@@ -83,29 +101,25 @@ class IsraeliPremierLeagueAPI:
 
         results.sort(key=lambda x: x["match_datetime"])
 
-        # הסר משחקים שהתחילו לפני יותר משעה וחצי
-        results = [
-            f for f in results
-            if f["match_datetime"] > now - timedelta(hours=1, minutes=30)
-        ]
+        # לכל משחק שהתחיל — בדוק סטטוס אמיתי מ-lookupevent
+        updated = []
+        for f in results:
+            if f["match_datetime"] <= now:
+                real_status = await self.async_get_real_status(f["fixture_id"])
+                if real_status:
+                    if real_status in FINISHED_STATUSES:
+                        # משחק הסתיים — הסתר אותו
+                        _LOGGER.debug("Hiding finished match: %s vs %s", f["home_team"], f["away_team"])
+                        continue
+                    # עדכן סטטוס אמיתי
+                    f["status_short"] = real_status
+                    f["status"] = self._status_map().get(real_status, real_status)
+            updated.append(f)
 
-        return results
+        return updated
 
-    def _translate_team(self, name: str) -> str:
-        return TEAM_NAMES_HE.get(name, name)
-
-    def _parse_event(self, event: dict) -> dict | None:
-        try:
-            date_str = event.get("dateEvent", "")
-            time_str = event.get("strTime", "00:00:00") or "00:00:00"
-            dt_utc = datetime.strptime(f"{date_str} {time_str[:5]}", "%Y-%m-%d %H:%M")
-            dt_utc = dt_utc.replace(tzinfo=timezone.utc)
-            il_time = dt_utc.astimezone(IL_TZ)
-        except Exception:
-            return None
-
-        status_raw = event.get("strStatus") or "NS"
-        status_map = {
+    def _status_map(self) -> dict:
+        return {
             "NS": "לא התחיל",
             "Match Finished": "הסתיים",
             "Halftime": "הפסקה",
@@ -121,6 +135,21 @@ class IsraeliPremierLeagueAPI:
             "Postponed": "נדחה",
             "Cancelled": "בוטל",
         }
+
+    def _translate_team(self, name: str) -> str:
+        return TEAM_NAMES_HE.get(name, name)
+
+    def _parse_event(self, event: dict) -> dict | None:
+        try:
+            date_str = event.get("dateEvent", "")
+            time_str = event.get("strTime", "00:00:00") or "00:00:00"
+            dt_utc = datetime.strptime(f"{date_str} {time_str[:5]}", "%Y-%m-%d %H:%M")
+            dt_utc = dt_utc.replace(tzinfo=timezone.utc)
+            il_time = dt_utc.astimezone(IL_TZ)
+        except Exception:
+            return None
+
+        status_raw = event.get("strStatus") or "NS"
 
         home_en = event.get("strHomeTeam", "")
         away_en = event.get("strAwayTeam", "")
@@ -138,7 +167,7 @@ class IsraeliPremierLeagueAPI:
             "away_logo": event.get("strAwayTeamBadge", ""),
             "home_score": event.get("intHomeScore"),
             "away_score": event.get("intAwayScore"),
-            "status": status_map.get(status_raw, status_raw),
+            "status": self._status_map().get(status_raw, status_raw),
             "status_short": status_raw,
             "venue": event.get("strVenue", ""),
             "round": event.get("intRound", ""),
