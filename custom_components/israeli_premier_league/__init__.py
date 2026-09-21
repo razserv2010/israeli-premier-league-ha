@@ -19,7 +19,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER,
         name=DOMAIN,
         update_method=api.async_get_fixtures,
-        update_interval=timedelta(minutes=1),
+        update_interval=timedelta(hours=entry.options.get(CONF_SCAN_INTERVAL, 6)),
     )
 
     await coordinator.async_config_entry_first_refresh()

@@ -3,8 +3,8 @@ DOMAIN = "israeli_premier_league"
 API_BASE_URL = "https://www.thesportsdb.com/api/v1/json/123"
 LEAGUE_ID = 4644
 
-DEFAULT_SCAN_INTERVAL = 3
-DAYS_AHEAD = 30
+DEFAULT_SCAN_INTERVAL = 6
+DAYS_AHEAD = 3
 
 CONF_API_KEY = "api_key"
 CONF_SCAN_INTERVAL = "scan_interval"

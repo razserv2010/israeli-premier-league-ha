@@ -47,7 +47,7 @@ class IsraeliPremierLeagueAPI:
     async def async_validate(self) -> bool:
         try:
             async with self._session.get(
-                f"{API_BASE_URL}/eventsday.php?d=2025-01-01&l={LEAGUE_ID}",
+                f"{API_BASE_URL}/eventsnextleague.php?id={LEAGUE_ID}",
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 return resp.status == 200
@@ -73,50 +73,45 @@ class IsraeliPremierLeagueAPI:
         return None
 
     async def async_get_fixtures(self) -> list[dict]:
+        """Fetch scheduled upcoming league fixtures only.
+
+        Uses the dedicated next-league endpoint so we do not issue one request
+        per calendar day. On TheSportsDB free API this may return only the next
+        event, but it keeps API usage extremely low and avoids rate limiting.
+        """
         now = datetime.now(IL_TZ)
+
+        try:
+            async with self._session.get(
+                f"{API_BASE_URL}/eventsnextleague.php?id={LEAGUE_ID}",
+                timeout=aiohttp.ClientTimeout(total=20),
+            ) as resp:
+                if resp.status != 200:
+                    raise UpdateFailed(
+                        f"TheSportsDB returned HTTP {resp.status} for upcoming fixtures"
+                    )
+                data = await resp.json(content_type=None)
+        except (aiohttp.ClientError, TimeoutError) as err:
+            raise UpdateFailed(f"Error fetching upcoming fixtures: {err}") from err
+
         results = []
         seen_ids = set()
-
-        for day_offset in range(DAYS_AHEAD + 1):
-            day = now + timedelta(days=day_offset)
-            date_str = day.strftime("%Y-%m-%d")
-
-            try:
-                async with self._session.get(
-                    f"{API_BASE_URL}/eventsday.php?d={date_str}&l={LEAGUE_ID}",
-                    timeout=aiohttp.ClientTimeout(total=15)
-                ) as resp:
-                    if resp.status != 200:
-                        continue
-                    data = await resp.json(content_type=None)
-            except aiohttp.ClientError as err:
-                _LOGGER.warning("Error fetching day %s: %s", date_str, err)
+        for event in data.get("events") or []:
+            parsed = self._parse_event(event)
+            if not parsed:
                 continue
+            fixture_id = parsed["fixture_id"]
+            if fixture_id in seen_ids:
+                continue
+            # Schedule only: do not poll live status/results. Keep only matches
+            # that have not started yet.
+            if parsed["match_datetime"] < now:
+                continue
+            seen_ids.add(fixture_id)
+            results.append(parsed)
 
-            for event in (data.get("events") or []):
-                parsed = self._parse_event(event)
-                if parsed and parsed["fixture_id"] not in seen_ids:
-                    seen_ids.add(parsed["fixture_id"])
-                    results.append(parsed)
-
-        results.sort(key=lambda x: x["match_datetime"])
-
-        # לכל משחק שהתחיל — בדוק סטטוס אמיתי מ-lookupevent
-        updated = []
-        for f in results:
-            if f["match_datetime"] <= now:
-                real_status = await self.async_get_real_status(f["fixture_id"])
-                if real_status:
-                    if real_status in FINISHED_STATUSES:
-                        # משחק הסתיים — הסתר אותו
-                        _LOGGER.debug("Hiding finished match: %s vs %s", f["home_team"], f["away_team"])
-                        continue
-                    # עדכן סטטוס אמיתי
-                    f["status_short"] = real_status
-                    f["status"] = self._status_map().get(real_status, real_status)
-            updated.append(f)
-
-        return updated
+        results.sort(key=lambda item: item["match_datetime"])
+        return results
 
     def _status_map(self) -> dict:
         return {
